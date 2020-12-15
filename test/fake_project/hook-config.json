@@ -1,0 +1,10 @@
+{
+    "folders": [
+        "."
+    ],
+    "hooks": [
+        {
+            "type": "hookpy.builtin_hooks.functrace::FuncTracePrint"
+        }
+    ]
+}

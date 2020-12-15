@@ -1,0 +1,14 @@
+{
+    "folders": [
+        "."
+    ],
+    "func_excludes": [
+        "get_.*"
+    ],
+    "hooks": [
+        {
+            "type": "hookpy.builtin_hooks.functrace::FuncTracePrint",
+            "config": {}
+        }
+    ]
+}
