@@ -64,6 +64,7 @@ def get_toplevel_func_node(tree: ast.AST):
 
 
 def find_toplevel_func_node_by_lineno(tree: ast.AST, lineno: int):
+    # TODO should we check try block?
     from collections import deque
     todo = deque([(tree.body, [])
                   ])  # type: Deque[Tuple[List[ast.AST], List[ast.AST]]]
@@ -77,6 +78,10 @@ def find_toplevel_func_node_by_lineno(tree: ast.AST, lineno: int):
                     return (node, cur_parent_ns)
                 elif node.lineno > lineno:
                     break
+            elif isinstance(node, (ast.If,)):
+                todo.append((node.body, cur_parent_ns))
+                todo.append((node.orelse, cur_parent_ns))
+
     return None
 
 
@@ -122,15 +127,15 @@ def get_func_id_by_object(func,
 def modify_func_of_file(tree: ast.AST, mod: ModuleType,
                         modifier: Callable[[Dict[str, Any], str, Any], None]):
     module_dict = mod.__dict__
-
     for node, parent_classes in get_toplevel_func_node(tree):
         mod_key_names = [n.name for n in parent_classes]
         names = mod_key_names + [node.name]
         if len(names) == 1:
             if names[0] not in module_dict:
                 continue
-            mod_set_attr = lambda k, v: setattr(mod, k, v)
-            modifier(mod, names[0], mod_set_attr)
+            key = names[0]
+            func_obj = getattr(mod, names[0])
+            obj_container = mod
         else:
             if names[0] not in module_dict:
                 continue
@@ -146,8 +151,22 @@ def modify_func_of_file(tree: ast.AST, mod: ModuleType,
                 continue
             if names[-1] not in dir(obj):
                 continue
-            mod_set_attr = lambda k, v: setattr(obj, k, v)
-            modifier(obj, names[-1], mod_set_attr)
+            key = names[-1]
+            func_obj = getattr(obj, names[0])
+            obj_container = obj
+
+        try:
+            obj_no_deco = try_remove_decorator(func_obj)
+            _, lineno = inspect.getsourcelines(obj_no_deco)
+        except OSError as e:
+            continue
+        except TypeError as e:
+            continue
+
+        if lineno != node.lineno:
+            continue
+        mod_set_attr = lambda k, v: setattr(obj_container, k, v)
+        modifier(obj_container, key, mod_set_attr)
 
 
 def get_module_object_by_imp_id(imp_id, use_path=False):

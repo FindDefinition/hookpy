@@ -21,6 +21,10 @@ def test_simple_hook():
         mod = importlib.import_module(proj_name)
         ss = io.StringIO("")
         with contextlib.redirect_stdout(ss):
-            mod.add.add(1, 2)
-        value = ss.getvalue().strip()
-        assert value == proj_name + ".add-add"
+            mod.add.add2(1, 2)
+        values = ss.getvalue().strip().split("\n")
+        assert len(values) == 2
+
+        assert values[0] == proj_name + ".add-add2"
+        assert values[1] == proj_name + ".add-add"
+

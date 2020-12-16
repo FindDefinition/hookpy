@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - master
+      - develop
+      - feature/*
     tags:
       - '*'
   
@@ -33,6 +35,9 @@ jobs:
     strategy:
       matrix:
         python-version: [3.5, 3.7, 3.8, 3.9]
+    env:
+      OS: 'ubuntu'
+      PYTHON: ${{ matrix.python-version }}
 
     steps:
       - uses: actions/checkout@master
@@ -41,12 +46,36 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: test
+      - name: install dependency
         run: |
           python -m pip install --upgrade pip twine wheel
-          python -m pip install pytest
+          python -m pip install pytest pytest-cov
           python -m pip install -e .
+
+      - name: run test
+        if: matrix.python-version != 3.9
+        run: |
           pytest ./test
+
+      - name: run test with codecov
+        if: matrix.python-version == 3.9
+        run: |
+          pytest ./test --cov=./hookpy --cov-report=xml
+
+      - name: run test with codecov
+        if: matrix.python-version == 3.9
+        uses: codecov/codecov-action@v1
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          file: ./coverage.xml
+          files: ./coverage1.xml,./coverage2.xml
+          directory: ./coverage/reports/
+          flags: unittests
+          env_vars: OS,PYTHON
+          name: codecov-umbrella
+          fail_ci_if_error: true
+          path_to_write_report: ./coverage/codecov_report.txt
+          verbose: true
 
       - name: Install pep517
         run: >-
