@@ -60,7 +60,7 @@ jobs:
       - name: run test with codecov
         if: matrix.python-version == 3.9
         run: |
-          pytest ./test --cov=./hookpy --cov-report=xml
+          pytest --cov=./hookpy --cov-report=xml ./test
 
       - name: run test with codecov
         if: matrix.python-version == 3.9
@@ -68,8 +68,6 @@ jobs:
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           file: ./coverage.xml
-          files: ./coverage1.xml,./coverage2.xml
-          directory: ./coverage/reports/
           flags: unittests
           env_vars: OS,PYTHON
           name: codecov-umbrella
