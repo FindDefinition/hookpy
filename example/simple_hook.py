@@ -7,7 +7,7 @@ from pathlib import Path
 from typing import Union
 
 import hookpy
-from hookpy import compat
+from hookpy import compat, funcid
 
 _LOCK = threading.Lock()
 
@@ -18,10 +18,11 @@ class FuncTraceSave(hookpy.Hook):
         self.impl = None
         self.save_path = Path(save_path)
 
-    def create_impl(self, func_id, func) -> bool:
+    def create_impl(self, func_meta: funcid.FuncMetadata, func) -> bool:
         isasyncgen = False or (compat.Python3_6AndLater and inspect.isasyncgenfunction(func))
         if not inspect.iscoroutinefunction(
                 func) and not isasyncgen:
+            func_id = func_meta.func_id
             @functools.wraps(func)
             def wrapped(*args, **kw):
                 with _LOCK:

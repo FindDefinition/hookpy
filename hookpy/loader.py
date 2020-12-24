@@ -7,11 +7,6 @@ from typing import Optional
 from hookpy import compat
 from hookpy.compat import VALID_PYTHON_MODULE_NAME_PATTERN
 
-if compat.Python3_8AndLater:
-    from importlib.metadata import PackageNotFoundError, distribution, version
-else:
-    from importlib_metadata import PackageNotFoundError, distribution, version
-
 CUSTOM_LOADED_MODULES = {}
 
 
@@ -40,7 +35,7 @@ def locate_package(package_name, cwd_check=False) -> Optional[Path]:
     return origin
 
 
-def locate_top_package(file_path, check_dist=False, cwd_check=False):
+def locate_top_package(file_path, cwd_check=False):
     """you need to provide a setup.py in your project and
     install it with pip install -e . or regular approach.
     if a package is located via cwd, a warn is produced and cwd package
@@ -54,22 +49,14 @@ def locate_top_package(file_path, check_dist=False, cwd_check=False):
         if package_root is not None:
             if package_root != path:
                 continue
-            if check_dist:
-                try:
-                    _ = distribution(path.stem)
-                    res = path
-                    break
-                except PackageNotFoundError:
-                    pass
-            else:
-                res = path
-                if path.parent == cwd and cwd_check:
-                    msg = (
-                        "find a package in cwd, you must use locate_top_package_subproc"
-                        " or run program in a directory that dont inside a package."
-                    )
-                    raise ValueError(msg)
-                break
+            res = path
+            if path.parent == cwd and cwd_check:
+                msg = (
+                    "find a package in cwd, you must use locate_top_package_subproc"
+                    " or run program in a directory that dont inside a package."
+                )
+                raise ValueError(msg)
+            break
     return res
 
 

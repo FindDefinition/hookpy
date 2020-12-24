@@ -7,7 +7,6 @@ from pathlib import Path
 import hookpy.core
 from hookpy import hookimport
 from hookpy.constants import HOOKPY_CONFIG_PATH_NAME, HOOKPY_ENABLE_NAME
-from hookpy.core import HOOK_CONFIG
 
 
 def main():
@@ -39,7 +38,7 @@ def auto_main_forward():
 
 
 def auto_main():
-    hookimport.install_register_hook(HOOK_CONFIG.hook_folders)
+    hookimport.install_register_hook(hookpy.core.HOOK_CONFIG.hook_folders)
     sys.path.append(str(Path(sys.argv[1]).parent))
     runpy.run_path(sys.argv[1], run_name="__main__")
 
@@ -49,7 +48,7 @@ def auto_main_auto_find_config():
     """
     found = False
     candidate = None
-    for parent in Path.cwd().parents:
+    for parent in Path(sys.argv[1]).parents:
         candidate = parent / 'hook-config.json'
         if candidate.exists():
             found = True
@@ -60,6 +59,6 @@ def auto_main_auto_find_config():
     hookpy.core.set_config_path(str(candidate))
     hookpy.core.enable_hook()
     hookpy.core.init_hook_config()
-    hookimport.install_register_hook(HOOK_CONFIG.hook_folders)
+    hookimport.install_register_hook(hookpy.core.HOOK_CONFIG.hook_folders)
     sys.path.append(str(Path(sys.argv[1]).parent))
     runpy.run_path(sys.argv[1], run_name="__main__")

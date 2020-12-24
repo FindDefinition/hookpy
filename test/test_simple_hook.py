@@ -27,4 +27,3 @@ def test_simple_hook():
 
         assert values[0] == proj_name + ".add-add2"
         assert values[1] == proj_name + ".add-add"
-

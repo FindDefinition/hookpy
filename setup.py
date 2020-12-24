@@ -22,7 +22,8 @@ VERSION = None
 
 # What packages are required for this module to be executed?
 REQUIRED = [
-    "importlib-metadata>=2.0; python_version < \"3.8\"",
+    # "importlib-metadata>=2.0; python_version < \"3.8\"",
+    "cachetools",
 ]
 
 # What packages are optional?

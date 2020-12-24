@@ -3,13 +3,66 @@ import importlib
 import inspect
 import re
 import runpy
+import threading
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Callable, Deque, Dict, List, Optional, Tuple, Union
 
+import cachetools
+
 from hookpy import loader
 
+_CACHE_LOCK = threading.Lock()
 
+
+class FuncMetadata:
+    def __init__(self, lines: List[str], lineno: int, path: str,
+                 node: Union[ast.FunctionDef,
+                             ast.AsyncFunctionDef], parents: List[ast.AST]):
+        self.lines = lines
+        self.lineno = lineno
+        self.path = Path(path)
+        self.node = node
+        self.parents = parents
+        self.func_id = None  # type: Optional[str]
+
+    def get_func_id(self,
+                    root: Optional[Union[Path, str]] = None,
+                    local: bool = False) -> Optional[str]:
+        names = [n.name for n in self.parents + [self.node]]
+        if local:
+            return "-".join(names)
+
+        if root is not None:
+            relative_path = self.path.relative_to(Path(root))
+            import_parts = list(relative_path.parts)
+            import_parts[-1] = relative_path.stem
+        else:
+            if not loader.is_path_in_package(self.path):
+                return None
+            import_parts = loader.try_capture_import_parts(self.path, None)
+        func_id = ".".join(import_parts) + "-" + "-".join(names)
+        return func_id
+
+
+def get_func_metadata(func):
+    func = try_remove_decorator(func)
+    try:
+        lines, lineno = inspect.getsourcelines(func)
+    except OSError:
+        return None
+    path = inspect.getsourcefile(func)
+    if path is None:
+        return None
+    tree, _ = parse_source_path(path)
+    func_node_meta = find_toplevel_func_node_by_lineno(tree, lineno)
+    if func_node_meta is None:
+        return None
+    node, parents = func_node_meta
+    return FuncMetadata(lines, lineno, path, node, parents)
+
+
+@cachetools.cached(cache={}, lock=_CACHE_LOCK)
 def parse_source_path(
         source_path: Union[Path, str]) -> Tuple[ast.AST, List[str]]:
     source_path = str(source_path)
@@ -33,19 +86,12 @@ def parse_source_path(
 
 
 def try_remove_decorator(func):
-    if isinstance(func, staticmethod):
-        # TODO: drop staticmethod support?
-        return func
+    if isinstance(func, (staticmethod, classmethod)):
+        return try_remove_decorator(func.__func__)
     if hasattr(func, "__wrapped__"):
         return try_remove_decorator(func.__wrapped__)
     else:
-        try:
-            inspect.getfile(func)
-            return func
-        except TypeError as e:
-            err_msg = "your decorator must use __wrapped__ to save wrapped object like functools.wraps"
-            print(err_msg)
-            raise e
+        return func
 
 
 def get_toplevel_func_node(tree: ast.AST):
@@ -78,7 +124,7 @@ def find_toplevel_func_node_by_lineno(tree: ast.AST, lineno: int):
                     return (node, cur_parent_ns)
                 elif node.lineno > lineno:
                     break
-            elif isinstance(node, (ast.If,)):
+            elif isinstance(node, (ast.If, )):
                 todo.append((node.body, cur_parent_ns))
                 todo.append((node.orelse, cur_parent_ns))
 
@@ -152,7 +198,7 @@ def modify_func_of_file(tree: ast.AST, mod: ModuleType,
             if names[-1] not in dir(obj):
                 continue
             key = names[-1]
-            func_obj = getattr(obj, names[0])
+            func_obj = getattr(obj, key)
             obj_container = obj
 
         try:

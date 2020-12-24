@@ -5,6 +5,7 @@ make function can be modified during runtime.
 import abc
 import atexit
 import functools
+import importlib
 import inspect
 import json
 import os
@@ -13,7 +14,7 @@ import threading
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type, Union
 
-from hookpy import compat, funcid
+from hookpy import compat, funcid, loader
 from hookpy.constants import HOOKPY_CONFIG_PATH, HOOKPY_ENABLE
 from hookpy.funcid import try_remove_decorator
 
@@ -50,6 +51,13 @@ class HookConfig:
             if not folder_p.is_absolute():
                 folder_p = self.config_path.parent / folder_p
             self.hook_folders[i] = str(folder_p)
+
+        for proj in self.hook_projects:
+            path = Path(loader.locate_package(proj))
+            if path.is_file():
+                self.hook_folders.append(str(path.parent))
+            else:
+                self.hook_folders.append(str(path))
 
     def get_hook_classes(
             self
@@ -118,6 +126,7 @@ def find_enable_hook(func_id):
 
 def register_hook(func=None):
     def wrapper(func):
+        # TODO try to disable hook execution before import finished
         if not HOOKPY_ENABLE:
             return func
         if compat.Python3_6AndLater:
@@ -127,20 +136,27 @@ def register_hook(func=None):
         # we need to know the function type, regular/generator/async/async generator
         # with/async with isn't supported.
         func_without_deco = try_remove_decorator(func)
-        path = inspect.getsourcefile(func_without_deco)
-        if path is None:
+        func_meta = funcid.get_func_metadata(func)
+        if func_meta is None:
             return func
-        func_id = funcid.get_func_id_by_object(func_without_deco)
+        path = func_meta.path
+        func_id = func_meta.get_func_id()
         func_name = ""
         if func_id is None:
             # get full path
-            local_parts = funcid.get_func_id_by_object(func_without_deco,
-                                                       local=True)
+            local_parts = func_meta.get_func_id(local=True)
             func_id = str(path) + "-" + local_parts
             func_name = local_parts[-1]
         else:
             _, _, local_parts = funcid.split_func_id(func_id)
             func_name = local_parts[-1]
+        func_meta.func_id = func_id  # TODO remove this
+        if func_name == "__getattr__":
+            # __getattr__ may cause inf recursive call
+            return func
+        if func_name == "__setattr__":
+            return func
+
         for pattern in HOOK_CONFIG.func_excludes:
             if pattern.match(func_name):
                 return func
@@ -150,10 +166,12 @@ def register_hook(func=None):
             hooks = []
             for hook_cls, config in HOOK_CONFIG.get_hook_classes():
                 hook = hook_cls(**config)
-                if hook.create_impl(func_id, func):
+                if hook.create_impl(func_meta, func):
                     hooks.append(hook)
             if hooks:
                 _FUNC_ID_TO_HOOKS[func_id] = hooks
+            else:
+                return func
         if inspect.iscoroutinefunction(func):
 
             @functools.wraps(func)
@@ -192,8 +210,11 @@ def register_hook(func=None):
 
 
 class Hook(abc.ABC):
+    def __init__(self, *args, **kwargs):
+        pass
+
     @abc.abstractmethod
-    def create_impl(self, func_id: str, func) -> bool:
+    def create_impl(self, func_meta: funcid.FuncMetadata, func) -> bool:
         """hook init impl. if failed, return a False,
         this hook won't be added to collection.
         """
