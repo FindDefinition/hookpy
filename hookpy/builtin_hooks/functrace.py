@@ -19,8 +19,7 @@ class FuncTracePrint(Hook):
 
             @functools.wraps(func)
             def wrapped(*args, **kw):
-                fcount = len(inspect.stack(0))
-                print(" " * fcount + func_id)
+                print(func_id)
                 return func(*args, **kw)
 
             self.impl = wrapped
