@@ -16,7 +16,11 @@ def locate_package(package_name, cwd_check=False) -> Optional[Path]:
     assert package_name != "__init__"
     if not VALID_PYTHON_MODULE_NAME_PATTERN.match(package_name):
         return None
-    spec = importlib.util.find_spec(package_name)
+    try:
+        spec = importlib.util.find_spec(package_name)
+    except ValueError:
+        # this usually happens when the module is overrided by a custom ModuleType.
+        return None 
     if spec is None:
         return None
     if spec.origin is None:

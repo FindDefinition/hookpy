@@ -12,6 +12,9 @@ run python with custom hooks.
 
 2. run python script with ```hookpy /path/to/script.py --option1 --option2=value2```
 
+## TODO
+
+* Add pre-compile mode: load file, compile to ast, modify ast and compile to module.
 
 ## License
 [![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FFindDefinition%2Fhookpy.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FFindDefinition%2Fhookpy?ref=badge_large)

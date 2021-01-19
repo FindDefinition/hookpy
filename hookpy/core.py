@@ -9,11 +9,12 @@ import importlib
 import inspect
 import json
 import os
+import ast 
 import re
 import threading
 from pathlib import Path
 from typing import Any, Dict, Generator, List, Optional, Tuple, Type, Union
-
+import yaml 
 from hookpy import compat, funcid, loader
 from hookpy.constants import HOOKPY_CONFIG_PATH, HOOKPY_ENABLE
 from hookpy.funcid import try_remove_decorator
@@ -26,12 +27,12 @@ _LOCK = threading.Lock()
 def read_config(config_path: str):
     config_path = Path(config_path)
     with config_path.open("r") as f:
-        data = json.load(f)
+        data = yaml.safe_load(f)
     return data
 
 
 class HookConfig:
-    def __init__(self, config_path: Union[Path, str], config):
+    def __init__(self, config_path: Union[Path, str], config: Dict[str, Any]):
         self.hook_folders = config.get("folders", [])  # type: List[str]
         self.hook_projects = config.get("projects", [])  # type: List[str]
         self.func_excludes = [
@@ -40,10 +41,29 @@ class HookConfig:
         self.folder_excludes = [
             re.compile(s) for s in config.get("folder_excludes", [])
         ]
-
-        self.hooks_config = config["hooks"]
+        self.module_excludes = [
+            re.compile(s) for s in config.get("module_excludes", [])
+        ]
         self.config_path = Path(config_path)
 
+        self.disable_class_decorator = config.get("disable_class_decorator", False)
+        self.disable_function_decorator = config.get("disable_function_decorator", False)
+        funcid_root = config.get("funcid_root", None)
+        if "root" in config:
+            self.root = Path(config["root"])
+            if not self.root.is_absolute():
+                self.root = self.config_path.parent / self.root
+        else:
+            self.root = self.config_path.parent
+        if funcid_root is None:
+            funcid_root = self.root 
+        else:
+            funcid_root = Path(funcid_root)
+            if not funcid_root.is_absolute():
+                funcid_root = self.config_path.parent / funcid_root
+        self.funcid_root = funcid_root
+
+        self.hooks_config = config["hooks"]
         # if dir in hook_folders is relative, use config_path to convert it
         # to absolute
         for i, folder in enumerate(self.hook_folders):
@@ -58,6 +78,13 @@ class HookConfig:
                 self.hook_folders.append(str(path.parent))
             else:
                 self.hook_folders.append(str(path))
+
+        for proj in self.module_excludes:
+            path = Path(loader.locate_package(proj))
+            if path.is_file():
+                self.folder_excludes.append(str(path.parent))
+            else:
+                self.folder_excludes.append(str(path))
 
     def get_hook_classes(
             self
@@ -81,6 +108,8 @@ def init_hook_config():
         HOOK_CONFIG = HookConfig(HOOKPY_CONFIG_PATH,
                                  read_config(HOOKPY_CONFIG_PATH))
 
+def get_hook_config():
+    return HOOK_CONFIG
 
 def enable_hook():
     global HOOKPY_ENABLE
@@ -121,6 +150,9 @@ def find_enable_hook(func_id):
             hook.is_enabled(True)
         else:
             hook.is_enabled(False)
+    # reorder hooks, ensure every hook can be called.
+    with _LOCK:
+        hooks.insert(0, hooks.pop())
     return impl
 
 
@@ -137,19 +169,30 @@ def register_hook(func=None):
         # with/async with isn't supported.
         func_without_deco = try_remove_decorator(func)
         func_meta = funcid.get_func_metadata(func)
+        node = func_meta.node 
+        for p in func_meta.parents[::-1]:
+            if isinstance(p, ast.ClassDef):
+                if HOOK_CONFIG.disable_class_decorator and p.decorator_list:
+                    return func
+        if HOOK_CONFIG.disable_function_decorator and node.decorator_list:
+            return func 
         if func_meta is None:
             return func
         path = func_meta.path
+        # print("{}:{}".format(path, func_meta.lineno))
         func_id = func_meta.get_func_id()
         func_name = ""
         if func_id is None:
             # get full path
-            local_parts = func_meta.get_func_id(local=True)
-            func_id = str(path) + "-" + local_parts
+            func_id = func_meta.get_func_id(root=HOOK_CONFIG.funcid_root)
+            # func_id = str(path) + "-" + local_parts
+            _, _, local_parts = funcid.split_func_id(func_id)
             func_name = local_parts[-1]
         else:
             _, _, local_parts = funcid.split_func_id(func_id)
             func_name = local_parts[-1]
+        # print("!!!", func_id, path, func_meta.lineno)
+
         func_meta.func_id = func_id  # TODO remove this
         if func_name == "__getattr__":
             # __getattr__ may cause inf recursive call

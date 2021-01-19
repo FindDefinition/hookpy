@@ -120,9 +120,14 @@ def find_toplevel_func_node_by_lineno(tree: ast.AST, lineno: int):
             if isinstance(node, (ast.ClassDef)):
                 todo.append((node.body, [*cur_parent_ns, node]))
             elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-                if node.lineno == lineno:
+                func_lineno = node.lineno
+                deco_list = node.decorator_list
+                # fix lineno to match inspect
+                if len(deco_list) > 0:
+                    func_lineno = min([d.lineno for d in deco_list])
+                if func_lineno == lineno:
                     return (node, cur_parent_ns)
-                elif node.lineno > lineno:
+                elif func_lineno > lineno:
                     break
             elif isinstance(node, (ast.If, )):
                 todo.append((node.body, cur_parent_ns))

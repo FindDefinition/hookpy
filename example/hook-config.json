@@ -10,5 +10,7 @@
             "type": "hookpy.builtin_hooks.functrace::FuncTracePrint",
             "config": {}
         }
-    ]
+    ],
+    "disable_class_decorator": false,
+    "disable_function_decorator": false
 }

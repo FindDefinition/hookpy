@@ -46,10 +46,15 @@ def auto_main():
 def auto_main_auto_find_config():
     """we assume a config file 'hook-config.json' is inside current dir.
     """
+    assert len(sys.argv) >= 2, "you must use hookpy with a python script path"
     found = False
     candidate = None
     for parent in Path(sys.argv[1]).parents:
-        candidate = parent / 'hook-config.json'
+        candidate = parent / 'hook-config.yaml'
+        if candidate.exists():
+            found = True
+            break
+        candidate = parent / 'hook-config.yml'
         if candidate.exists():
             found = True
             break
