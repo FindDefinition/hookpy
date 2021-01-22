@@ -67,6 +67,7 @@ def test_hold():
             f.write(_SOURCE.format(global_func=_GLOBAL_FUNC, context="", hold=""))
         stdout, _ = proc.communicate(timeout=0.5)
         stdouts = stdout.decode("utf-8").strip().split("\n")
+        stdouts = [l.strip() for l in stdouts]
         assert stdouts == ['5', 'module reload', '-----Exec main-----', '??', 'hold_context_node not found. break', '3']
 
 if __name__ == "__main__":
