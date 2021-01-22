@@ -100,3 +100,14 @@ def try_capture_import_parts(source_path, package_name=None):
 
 def is_path_in_package(path):
     return locate_top_package(path) is not None
+
+
+def import_from_path(path, mod_name=None):
+    path = Path(path)
+    if mod_name is None:
+        mod_name = path.name.split(".")[0]
+    spec = importlib.util.spec_from_file_location(mod_name, str(path))
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[mod_name] = module
+    spec.loader.exec_module(module)
+    return module

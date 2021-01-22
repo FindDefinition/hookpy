@@ -7,9 +7,9 @@ import threading
 from pathlib import Path
 from types import ModuleType
 from typing import Any, Callable, Deque, Dict, List, Optional, Tuple, Union
-
+import tokenize
 import cachetools
-
+import io 
 from hookpy import loader
 
 _CACHE_LOCK = threading.Lock()
@@ -96,7 +96,7 @@ def try_remove_decorator(func):
 
 def get_toplevel_func_node(tree: ast.AST):
     from collections import deque
-    res = []  # type: List[Tuple[ast.AST, List[ast.AST]]]
+    res = []  # type: List[Tuple[Union[ast.FunctionDef, ast.AsyncFunctionDef], List[ast.ClassDef]]]
     todo = deque([(tree.body, [])
                   ])  # type: Deque[Tuple[List[ast.AST], List[ast.AST]]]
     while todo:
@@ -113,7 +113,7 @@ def find_toplevel_func_node_by_lineno(tree: ast.AST, lineno: int):
     # TODO should we check try block?
     from collections import deque
     todo = deque([(tree.body, [])
-                  ])  # type: Deque[Tuple[List[ast.AST], List[ast.AST]]]
+                  ])  # type: Deque[Tuple[List[ast.AST], List[ast.ClassDef]]]
     while todo:
         body, cur_parent_ns = todo.popleft()
         for node in body:
@@ -235,3 +235,43 @@ def get_module_object_by_imp_id(imp_id, use_path=False):
     for part in local_parts[1:]:
         obj = getattr(obj, part)
     return obj
+
+
+def get_tokens(source: str, toknums: Tuple[int]):
+    tokens = tokenize.tokenize(io.BytesIO(source.encode('utf-8')).readline)
+    for toknum, tokval, (srow, scol), (erow, ecol), line in tokens:
+        if toknum in toknums:
+            yield (tokval, (srow, scol), (erow, ecol), line)
+
+
+def get_all_comments(source: str) -> List[Tuple[str, int, int]]:
+    res = []
+    for tokval, (srow, scol), _, _ in get_tokens(source, (tokenize.COMMENT, )):
+        res.append((tokval, srow, scol))
+    return res
+
+
+def clean_source_code(lines: List[str],
+                      remove_comment: bool=True,
+                      remove_empty_line: bool=True,
+                      source: Optional[str]=None,
+                      rstrip: bool=True):
+    if source is None:
+        source = "\n".join(lines)
+    lines = lines.copy()
+    if remove_comment:
+        comments = get_all_comments(source)
+        for _, srow, scol in comments:
+            lines[srow - 1] = lines[srow - 1][:scol]
+    if rstrip:
+        lines = [l.rstrip() for l in lines]
+    if remove_empty_line:
+        new_lines = [] # type: List[str]
+        for line in lines:
+            line_test = line.strip(" \t")
+            if line_test != "":
+                new_lines.append(line)
+    else:
+        new_lines = lines
+    return new_lines
+
